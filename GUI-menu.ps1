@@ -189,6 +189,16 @@ $btnExecute.Add_Click({
             $chkNews.Checked = $true
             foreach ($i in 0..($lstServices.Items.Count-1)) { $lstServices.SetItemChecked($i, $true) }
         }
+        # Import modules
+        Import-Module "$PSScriptRoot\Modules\Remove-Apps.ps1" -Force
+
+        # Call the function with checkbox states
+        Remove-SelectedApps -Xbox $chkXbox.Checked `
+                    -OneDrive $chkOneDrive.Checked `
+                    -Store $chkStore.Checked `
+                    -Edge $chkEdge.Checked `
+                    -Cortana $chkCortana.Checked `
+                    -News $chkNews.Checked
 
         # Execute app removals
         if ($chkXbox.Checked) {
