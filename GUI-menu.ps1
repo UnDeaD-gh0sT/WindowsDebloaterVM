@@ -214,13 +214,14 @@ $btnExecute.Add_Click({
             Write-Host "OneDrive removal attempted."
         }
 
-        # Services
-        foreach ($item in $lstServices.CheckedItems) {
-            try {
-                Stop-Service -Name $item -Force -ErrorAction SilentlyContinue
-                Set-Service -Name $item -StartupType Disabled -ErrorAction SilentlyContinue
-                Write-Host "Disabled service: $item"
-            } catch {}
+        # Services -- imoprt module from Module/Disable-Services.ps1
+        Import-Module "$PSScriptRoot\Modules\Disable-Services.ps1" -Force -ErrorAction SilentlyContinue
+
+        if ($lstServices.CheckedItems.Count -gt 0) {
+            $checkedServices = $lstServices.CheckedItems | ForEach-Object { $_.ToString() }
+            Disable-SelectedServices -SelectedServices $checkedServices
+        } else {
+            Write-Output "No services selected for disabling."
         }
 
         # Placeholder for more actions (privacy, WinSxS, etc.)
