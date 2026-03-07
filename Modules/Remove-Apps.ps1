@@ -1,47 +1,69 @@
-# Better fonts everywhere
-$form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+# =============================================================================
+# Remove-Apps.ps1 - Safe Appx + Provisioned + basic root cleanup
+# Called from GUI with selected items
+# =============================================================================
 
-# Status label at bottom
-$lblStatus = New-Object System.Windows.Forms.Label
-$lblStatus.Text = "Ready - Select options and click Execute"
-$lblStatus.Location = New-Object System.Drawing.Point(20, 620)
-$lblStatus.Size = New-Object System.Drawing.Size(760, 30)
-$lblStatus.ForeColor = [System.Drawing.Color]::LimeGreen
-$lblStatus.BackColor = [System.Drawing.Color]::FromArgb(40,40,40)
-$lblStatus.TextAlign = "MiddleLeft"
-$form.Controls.Add($lblStatus)
+function Remove-SelectedApps {
+    param(
+        [bool]$Xbox,
+        [bool]$OneDrive,
+        [bool]$Store,
+        [bool]$Edge,
+        [bool]$Cortana,
+        [bool]$News
+    )
 
-# Flat buttons example
-$btnExecute.FlatStyle = "Flat"
-$btnExecute.FlatAppearance.BorderSize = 0
-$btnExecute.BackColor = [System.Drawing.Color]::FromArgb(220,53,69)   # Red-ish
-$btnExecute.ForeColor = [System.Drawing.Color]::White
+    $logPath = "$PSScriptRoot\..\Logs\Debloater-$(Get-Date -Format 'yyyyMMdd-HHmm').log"
+    Start-Transcript -Path $logPath -Append
 
-$btnRestorePoint.FlatStyle = "Flat"
-$btnRestorePoint.FlatAppearance.BorderSize = 0
-$btnRestorePoint.BackColor = [System.Drawing.Color]::FromArgb(0,123,255)
-$btnRestorePoint.ForeColor = [System.Drawing.Color]::White
+    try {
+        if ($Xbox) {
+            Write-Output "Removing Xbox components..."
+            Get-AppxPackage -AllUsers "*xbox*" | Remove-AppxPackage -ErrorAction SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like "*xbox*" } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+        }
 
-# ProgressBar (marquee style during apply)
-$progress = New-Object System.Windows.Forms.ProgressBar
-$progress.Style = "Marquee"
-$progress.MarqueeAnimationSpeed = 30
-$progress.Location = New-Object System.Drawing.Point(20, 570)
-$progress.Size = New-Object System.Drawing.Size(760, 20)
-$progress.Visible = $false
-$form.Controls.Add($progress)
+        if ($OneDrive) {
+            Write-Output "Removing OneDrive (basic)..."
+            taskkill /f /im OneDrive.exe 2>$null
+            if (Test-Path "$env:SystemRoot\SysWOW64\OneDriveSetup.exe") {
+                Start-Process "$env:SystemRoot\SysWOW64\OneDriveSetup.exe" -ArgumentList "/uninstall" -Wait -NoNewWindow
+            }
+            # More deep removal in Deep-Removals.ps1 later
+        }
 
-# In Execute click handler:
-$btnExecute.Add_Click({
-    ...
-    $lblStatus.Text = "Applying changes... Please wait"
-    $lblStatus.ForeColor = [System.Drawing.Color]::Yellow
-    $progress.Visible = $true
-    $form.Refresh()
+        if ($Store) {
+            Write-Output "Removing Microsoft Store..."
+            Get-AppxPackage -AllUsers "*WindowsStore*" | Remove-AppxPackage -ErrorAction SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -like "*WindowsStore*" } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+        }
 
-    # ... your removal code ...
+        if ($Edge) {
+            Write-Output "Removing Edge stubs (basic)..."
+            Get-AppxPackage -AllUsers "*Edge*" | Remove-AppxPackage -ErrorAction SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object { $_.PackageName -like "*Edge*" } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+            # Deep folder/registry in Deep-Removals.ps1
+        }
 
-    $progress.Visible = $false
-    $lblStatus.Text = "Changes applied successfully. Reboot recommended."
-    $lblStatus.ForeColor = [System.Drawing.Color]::LimeGreen
-})
+        if ($Cortana) {
+            Write-Output "Disabling Cortana..."
+            reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\Windows Search" /v AllowCortana /t REG_DWORD /d 0 /f
+            # More in Privacy-Tweaks.ps1
+        }
+
+        if ($News) {
+            Write-Output "Disabling News/Widgets..."
+            reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Feeds" /v ShellFeedsTaskbarViewMode /t REG_DWORD /d 2 /f
+        }
+
+        Write-Output "App removal phase completed."
+    }
+    catch {
+        Write-Output "Error in app removal: $($_.Exception.Message)"
+    }
+    finally {
+        Stop-Transcript
+    }
+}
+
+Export-ModuleMember -Function Remove-SelectedApps
