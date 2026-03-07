@@ -26,7 +26,7 @@ Write-Host "Fetching latest GUI menu from GitHub..." -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    $menuUrl = "https://raw.githubusercontent.com/UnDeaD-gh0sT/WindowsDebloaterVM/main/GUI-Menu.ps1"
+    $menuUrl = "https://raw.githubusercontent.com/UnDeaD-gh0sT/WindowsDebloaterVM/main/GUI-menu.ps1"
     $menuContent = Invoke-RestMethod -Uri $menuUrl -UseBasicParsing -ErrorAction Stop
 
     if ([string]::IsNullOrWhiteSpace($menuContent)) {
