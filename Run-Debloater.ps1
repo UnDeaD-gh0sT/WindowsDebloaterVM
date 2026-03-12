@@ -1,6 +1,5 @@
 # =============================================================================
-# Windows VM UltraDebloater - Launcher (2025/2026 edition)
-# One command to rule them all — no permanent downloads required
+# Windows VM UltraDebloater <> Launcher (2025/2026 edition)
 #
 # How to run:
 #   irm https://raw.githubusercontent.com/UnDeaD-gh0sT/WindowsDebloaterVM/main/Run-Debloater.ps1 | iex
@@ -8,6 +7,8 @@
 # =============================================================================
 
 Clear-Host
+$TempPath = "$env:TEMP\UltraDebloater"
+$RepoBase = "https://raw.githubusercontent.com/UnDeaD-gh0sT/WindowsDebloaterVM/main"
 
 Write-Host "┌──────────────────────────────────────────────────────────────┐" -ForegroundColor Cyan
 Write-Host "│             Windows VM UltraDebloater Launcher               │" -ForegroundColor Cyan
@@ -22,36 +23,43 @@ if ((Get-ExecutionPolicy -Scope Process) -ne 'Bypass') {
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 }
 
-Write-Host "Fetching latest GUI menu from GitHub..." -ForegroundColor Yellow
-Write-Host ""
+# Create temp folder
+if (Test-Path $TempPath) { Remove-Item $TempPath -Recurse -Force }
+New-Item -Path $TempPath -ItemType Directory -Force | Out-Null
+New-Item -Path "$TempPath\Modules" -ItemType Directory -Force | Out-Null
 
-try {
-    $menuUrl = "https://raw.githubusercontent.com/UnDeaD-gh0sT/WindowsDebloaterVM/main/GUI-menu.ps1"
-    $menuContent = Invoke-RestMethod -Uri $menuUrl -UseBasicParsing -ErrorAction Stop
+Write-Host "Downloading files to $TempPath ..." -ForegroundColor Yellow
 
-    if ([string]::IsNullOrWhiteSpace($menuContent)) {
-        throw "Downloaded script is empty"
+# Download all files
+$files = @(
+    "GUI-Menu.ps1",
+    "Modules/Remove-Apps.ps1",
+    "Modules/Disable-Services.ps1"   # add more later when we create them
+)
+
+foreach ($file in $files) {
+    $url = "$RepoBase/$file"
+    $out = "$TempPath/$file"
+    try {
+        Invoke-RestMethod -Uri $url -OutFile $out -UseBasicParsing
+        Write-Host "  ✓ Downloaded $file" -ForegroundColor Green
+    } catch {
+        Write-Host "  ✗ Failed to download $file" -ForegroundColor Red
+        exit 1
     }
-
-    Write-Host "Menu downloaded successfully. Launching interface..." -ForegroundColor Green
-    Write-Host ""
-
-    # Execute the downloaded GUI script in current scope
-    Invoke-Expression $menuContent
-}
-catch {
-    Write-Host "Error downloading or executing the menu:" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Possible causes:" -ForegroundColor DarkYellow
-    Write-Host "  • Wrong GitHub username/repo in the URL" -ForegroundColor DarkYellow
-    Write-Host "  • File 'GUI-Menu.ps1' not uploaded yet" -ForegroundColor DarkYellow
-    Write-Host "  • Network / GitHub rate limit issue" -ForegroundColor DarkYellow
-    Write-Host ""
-    Write-Host "Press any key to exit..." -ForegroundColor Gray
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit 1
 }
 
-Write-Host ""
+Write-Host "All files downloaded. Launching GUI from local folder..." -ForegroundColor Green
+
+# Run the GUI from real disk (now $PSScriptRoot works)
+Set-Location $TempPath
+& "$TempPath\GUI-Menu.ps1"
+
+Write-Host "Cleanup temp folder? (Y/N)" -ForegroundColor Yellow
+$cleanup = Read-Host
+if ($cleanup -match '^y') {
+    Remove-Item $TempPath -Recurse -Force
+    Write-Host "Temp folder cleaned." -ForegroundColor Green
+}
+
 Write-Host "Session finished." -ForegroundColor Green
