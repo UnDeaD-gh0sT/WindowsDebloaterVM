@@ -23,43 +23,25 @@ if ((Get-ExecutionPolicy -Scope Process) -ne 'Bypass') {
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 }
 
-# Create temp folder
+# Create Test folder
 if (Test-Path $TempPath) { Remove-Item $TempPath -Recurse -Force }
 New-Item -Path $TempPath -ItemType Directory -Force | Out-Null
 New-Item -Path "$TempPath\Modules" -ItemType Directory -Force | Out-Null
 
-Write-Host "Downloading files to $TempPath ..." -ForegroundColor Yellow
+Write-Host "Downloading files..." -ForegroundColor Yellow
 
-# Download all files
-$files = @(
-    "GUI-Menu.ps1",
-    "Modules/Remove-Apps.ps1",
-    "Modules/Disable-Services.ps1"   # add more later when we create them
-)
+$files = @("GUI-Menu.ps1", "Modules/Remove-Apps.ps1", "Modules/Disable-Services.ps1")
 
 foreach ($file in $files) {
-    $url = "$RepoBase/$file"
-    $out = "$TempPath/$file"
-    try {
-        Invoke-RestMethod -Uri $url -OutFile $out -UseBasicParsing
-        Write-Host "  ✓ Downloaded $file" -ForegroundColor Green
-    } catch {
-        Write-Host "  ✗ Failed to download $file" -ForegroundColor Red
-        exit 1
-    }
+    Invoke-RestMethod -Uri "$RepoBase/$file" -OutFile "$TempPath/$file"
+    Write-Host "  ✓ $file" -ForegroundColor Green
 }
 
-Write-Host "All files downloaded. Launching GUI from local folder..." -ForegroundColor Green
-
-# Run the GUI from real disk (now $PSScriptRoot works)
+Write-Host "Launching GUI..." -ForegroundColor Green
 Set-Location $TempPath
 & "$TempPath\GUI-Menu.ps1"
 
-Write-Host "Cleanup temp folder? (Y/N)" -ForegroundColor Yellow
-$cleanup = Read-Host
-if ($cleanup -match '^y') {
-    Remove-Item $TempPath -Recurse -Force
-    Write-Host "Temp folder cleaned." -ForegroundColor Green
-}
+Write-Host "Done. Temp folder is at: $TempPath" -ForegroundColor Yellow
+Write-Host "You can delete it manually anytime." -ForegroundColor Gray
 
 Write-Host "Session finished." -ForegroundColor Green
