@@ -45,5 +45,3 @@ function Disable-SelectedServices {
     Write-Output "Service disable phase completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
     Stop-Transcript
 }
-
-Export-ModuleMember -Function Disable-SelectedServices

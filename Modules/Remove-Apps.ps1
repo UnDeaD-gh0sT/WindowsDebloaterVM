@@ -65,5 +65,3 @@ function Remove-SelectedApps {
         Stop-Transcript
     }
 }
-
-Export-ModuleMember -Function Remove-SelectedApps
