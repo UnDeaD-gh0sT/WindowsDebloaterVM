@@ -169,66 +169,73 @@ $btnRestorePoint.Add_Click({
 
 $btnExecute.Add_Click({
     $confirmation = [System.Windows.Forms.MessageBox]::Show(
-        "This will apply the selected changes.`n`nAre you sure? (Snapshot your VM first!)",
-        "Confirm Debloat",
-        [System.Windows.Forms.MessageBoxButtons]::YesNo,
-        [System.Windows.Forms.MessageBoxIcon]::Warning
+        "This will apply selected changes in background.`nGUI will stay responsive.`n`nConfirm? (Snapshot VM first!)",
+        "Confirm",
+        "YesNo",
+        "Warning"
     )
 
     if ($confirmation -eq "Yes") {
-        $form.Enabled = $false
+        $form.Enabled = $false          # Prevent double-clicks
         $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
 
-        # Aggression-based auto-select (example)
-        if ($rdoNuclear.Checked) {
-            $chkXbox.Checked = $true
-            $chkOneDrive.Checked = $true
-            $chkStore.Checked = $true
-            $chkEdge.Checked = $true
-            $chkCortana.Checked = $true
-            $chkNews.Checked = $true
-            foreach ($i in 0..($lstServices.Items.Count-1)) { $lstServices.SetItemChecked($i, $true) }
-        }
-        # Import modules/remove-apps.ps1
-        Import-Module "$PSScriptRoot\Modules/Remove-Apps.ps1" -Force -ErrorAction SilentlyContinue
+        $lblStatus.Text = "Starting background removal... GUI remains responsive"
+        $lblStatus.ForeColor = [System.Drawing.Color]::Yellow
+        $progress.Visible = $true
+        $form.Refresh()
 
-        Remove-SelectedApps -Xbox $chkXbox.Checked `
-                            -OneDrive $chkOneDrive.Checked `
-                            -Store $chkStore.Checked `
-                            -Edge $chkEdge.Checked `
-                            -Cortana $chkCortana.Checked `
-                            -News $chkNews.Checked
+        # ── Launch background job for all heavy work ────────────────────────
+        $job = Start-Job -ScriptBlock {
+            param(
+                $chkXboxVal, $chkOneDriveVal, $chkStoreVal, $chkEdgeVal, $chkCortanaVal, $chkNewsVal,
+                $checkedServicesArray
+            )
 
-        # Execute app removals
-        if ($chkXbox.Checked) {
-            Get-AppxPackage *xbox* -AllUsers | Remove-AppxPackage -ErrorAction SilentlyContinue
-            Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -like "*xbox*"} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
-            Write-Host "Xbox components removed."
-        }
+            # Re-import modules in job context
+            Import-Module "$using:PSScriptRoot\Modules\Remove-Apps.ps1" -Force -ErrorAction SilentlyContinue
+            Import-Module "$using:PSScriptRoot\Modules\Disable-Services.ps1" -Force -ErrorAction SilentlyContinue
 
-        if ($chkOneDrive.Checked) {
-            # Basic OneDrive removal (expand later with deep function)
-            taskkill /f /im OneDrive.exe 2>$null
-            & "$env:SystemRoot\SysWOW64\OneDriveSetup.exe" /uninstall
-            Write-Host "OneDrive removal attempted."
-        }
+            # Run app removal
+            Remove-SelectedApps -Xbox $chkXboxVal -OneDrive $chkOneDriveVal -Store $chkStoreVal `
+                                -Edge $chkEdgeVal -Cortana $chkCortanaVal -News $chkNewsVal
 
-        # Services -- imoprt module from Module/Disable-Services.ps1
-        Import-Module "$PSScriptRoot\Modules\Disable-Services.ps1" -Force -ErrorAction SilentlyContinue
+            # Run service disable
+            if ($checkedServicesArray.Count -gt 0) {
+                Disable-SelectedServices -SelectedServices $checkedServicesArray
+            }
 
-        if ($lstServices.CheckedItems.Count -gt 0) {
-            $checkedServices = $lstServices.CheckedItems | ForEach-Object { $_.ToString() }
-            Disable-SelectedServices -SelectedServices $checkedServices
-        } else {
-            Write-Output "No services selected for disabling."
-        }
+            # Signal completion (write to a file the job can read later)
+            "DONE" | Out-File "$env:TEMP\UltraDebloater\job-done.txt" -Force
+        } -ArgumentList $chkXbox.Checked, $chkOneDrive.Checked, $chkStore.Checked, $chkEdge.Checked, $chkCortana.Checked, $chkNews.Checked, ($lstServices.CheckedItems | ForEach-Object { $_.ToString() })
 
-        # Placeholder for more actions (privacy, WinSxS, etc.)
+        # ── Poll job status in UI thread (non-blocking) ─────────────────────
+        $timer = New-Object System.Windows.Forms.Timer
+        $timer.Interval = 1000  # check every second
+        $timer.Add_Tick({
+            if ($job.State -eq "Completed") {
+                $timer.Stop()
+                $timer.Dispose()
 
-        $form.Enabled = $true
-        $form.Cursor = [System.Windows.Forms.Cursors]::Default
+                $progress.Visible = $false
+                $lblStatus.Text = "Background job finished! Check console / logs."
+                $lblStatus.ForeColor = [System.Drawing.Color]::LimeGreen
+                $form.Enabled = $true
+                $form.Cursor = [System.Windows.Forms.Cursors]::Default
 
-        [System.Windows.Forms.MessageBox]::Show("Changes applied.`n`nReboot recommended for full effect.", "Done", "OK", "Information")
+                # Optional: Receive output from job (shows in console)
+                Receive-Job $job -AutoRemoveJob -Wait | Out-Host
+
+                [System.Windows.Forms.MessageBox]::Show("Removal complete.`n`nReboot recommended.", "Success", "OK", "Information")
+            }
+            elseif ($job.State -eq "Failed") {
+                $timer.Stop()
+                $lblStatus.Text = "Job failed – check console."
+                $lblStatus.ForeColor = [System.Drawing.Color]::Red
+                $form.Enabled = $true
+                Receive-Job $job -ErrorAction SilentlyContinue
+            }
+        })
+        $timer.Start()
     }
 })
 
@@ -236,5 +243,20 @@ $btnRevert.Add_Click({
     [System.Windows.Forms.MessageBox]::Show("Revert function is not implemented yet.`n`nNext update will include full undo (re-enable services, re-register apps, etc.).", "Info", "OK", "Information")
 })
 
+
+$lblStatus = New-Object System.Windows.Forms.Label
+$lblStatus.Text = "Ready"
+$lblStatus.Location = New-Object System.Drawing.Point(20, 620)
+$lblStatus.Size = New-Object System.Drawing.Size(760, 30)
+$lblStatus.ForeColor = [System.Drawing.Color]::LimeGreen
+$form.Controls.Add($lblStatus)
+
+$progress = New-Object System.Windows.Forms.ProgressBar
+$progress.Style = "Marquee"
+$progress.MarqueeAnimationSpeed = 30
+$progress.Location = New-Object System.Drawing.Point(20, 580)
+$progress.Size = New-Object System.Drawing.Size(760, 20)
+$progress.Visible = $false
+$form.Controls.Add($progress)
 # Show the form
 $form.ShowDialog() | Out-Null
