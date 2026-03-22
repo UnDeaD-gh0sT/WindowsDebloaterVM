@@ -23,8 +23,15 @@ if ((Get-ExecutionPolicy -Scope Process) -ne 'Bypass') {
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 }
 
-# Create Test folder
-if (Test-Path $TempPath) { Remove-Item $TempPath -Recurse -Force }
+# Clean previous temp folder (ignore if locked)
+if (Test-Path $TempPath) {
+    try {
+        Remove-Item $TempPath -Recurse -Force -ErrorAction Stop
+    } catch {
+        Write-Host "Warning: Could not delete old temp folder (it may be in use). Using existing one." -ForegroundColor Yellow
+    }
+}
+
 New-Item -Path $TempPath -ItemType Directory -Force | Out-Null
 New-Item -Path "$TempPath\Modules" -ItemType Directory -Force | Out-Null
 
